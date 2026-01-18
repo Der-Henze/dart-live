@@ -28,15 +28,12 @@ io.on('connection', (socket) => {
     });
 });
 
+// Port-Konfiguration für die Cloud und Lokal
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => {
-    console.log('Darts-Server läuft auf Port ' + PORT);
-});
 
-// Diese Prüfung verhindert den "ERR_SERVER_ALREADY_LISTEN" Fehler
+// Der Server startet nur hier, genau einmal.
 if (!module.parent) {
     http.listen(PORT, () => {
         console.log('Darts-Server läuft auf Port ' + PORT);
     });
 }
-
