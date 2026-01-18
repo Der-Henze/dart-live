@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darts Pro Elite | Live</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --gray: #334155;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; }
+        body { background-color: var(--bg); color: var(--text); overflow-x: hidden; padding: 20px; }
+
+        .container { min-height: 90vh; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .hidden { display: none !important; }
+
+        /* --- STARTSEITE --- */
+        .mode-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; width: 100%; max-width: 800px; }
+        .mode-card { background: var(--card-bg); border: 1px solid var(--gray); padding: 40px; border-radius: 20px; cursor: pointer; transition: 0.3s; text-align: center; }
+        .mode-card:hover { border-color: var(--accent); transform: translateY(-5px); }
+
+        /* --- SCOREBOARD --- */
+        .game-layout { width: 100%; max-width: 1100px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .player-box { background: var(--card-bg); padding: 30px; border-radius: 24px; transition: 0.4s; opacity: 0.4; border: 2px solid transparent; text-align: center; position: relative; }
+        .player-box.active { opacity: 1; border-color: var(--accent); box-shadow: 0 0 30px rgba(56, 189, 248, 0.2); }
+        .player-label { letter-spacing: 2px; font-weight: 800; opacity: 0.5; font-size: 0.9rem; }
+        .you-indicator { color: var(--accent); font-weight: 900; margin-left: 5px; }
+        
+        .score-display { font-size: 6rem; font-weight: 900; color: var(--text); line-height: 1; margin: 10px 0; }
+        .avg-display { color: var(--accent); font-weight: 600; font-size: 1.2rem; margin-bottom: 10px; }
+        .checkout-display { height: 30px; color: var(--success); font-weight: 700; font-size: 1.4rem; }
+
+        .dart-dots { display: flex; justify-content: center; gap: 12px; margin-top: 20px; }
+        .dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--gray); transition: 0.3s; }
+        .dot.filled { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+        /* --- INPUT AREA --- */
+        .input-container { background: var(--card-bg); padding: 25px; border-radius: 32px; width: 100%; max-width: 550px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        .keypad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+        .key { background: var(--gray); border: none; padding: 20px; border-radius: 16px; font-weight: 800; color: white; cursor: pointer; transition: 0.1s; font-size: 1.2rem; }
+        .key:hover { background: #475569; }
+        .key:active { transform: scale(0.9); }
+        .key.modifier { background: #1e293b; border: 1px solid var(--gray); }
+        .key.modifier.active { background: var(--accent); color: var(--bg); }
+        .key.bull { background: var(--text); color: var(--bg); }
+
+        .controls { display: flex; gap: 15px; margin-top: 20px; }
+        .btn { flex: 1; padding: 18px; border-radius: 16px; border: none; cursor: pointer; font-weight: 700; text-transform: uppercase; transition: 0.2s; }
+        .btn-undo { background: #334155; color: #94a3b8; }
+        .btn-confirm { background: var(--accent); color: var(--bg); }
+
+        /* Blockierungshinweis */
+        .overlay-msg { color: var(--warning); font-size: 0.9rem; margin-top: 10px; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="container">
+        <h1 style="font-size: 3.5rem; margin-bottom: 40px; letter-spacing: -2px;">DARTS<span style="color:var(--accent)">PRO</span> ELITE</h1>
+        <div class="mode-grid">
+            <div class="mode-card" onclick="startGame('501')"><h2>501</h2><p>Double Out</p></div>
+            <div class="mode-card" onclick="startGame('301')"><h2>301</h2><p>Fast Game</p></div>
+        </div>
+    </div>
+
+    <div id="game-screen" class="container hidden">
+        <div class="game-layout">
+            <div id="p1-box" class="player-box active">
+                <div class="player-label">PLAYER 1<span id="label-you-1" class="you-indicator hidden">(DU)</span></div>
+                <div id="score1" class="score-display">501</div>
+                <div id="avg1" class="avg-display">AVG: 0.0</div>
+                <div id="co1" class="checkout-display"></div>
+                <div class="dart-dots" id="dots1"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            </div>
+            <div id="p2-box" class="player-box">
+                <div class="player-label">PLAYER 2<span id="label-you-2" class="you-indicator hidden">(DU)</span></div>
+                <div id="score2" class="score-display">501</div>
+                <div id="avg2" class="avg-display">AVG: 0.0</div>
+                <div id="co2" class="checkout-display"></div>
+                <div class="dart-dots" id="dots2"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+            </div>
+        </div>
+
+        <div class="input-container">
+            <div id="turn-msg" class="overlay-msg hidden" style="text-align: center; margin-bottom: 10px;">Der andere Spieler ist an der Reihe...</div>
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button class="key modifier" style="flex:1" id="mod-d" onclick="setModifier(2)">DOUBLE</button>
+                <button class="key modifier" style="flex:1" id="mod-t" onclick="setModifier(3)">TRIPLE</button>
+            </div>
+            <div id="keypad" class="keypad"></div>
+            <div class="controls">
+                <button class="btn btn-undo" onclick="undo()">Undo</button>
+                <button class="btn btn-confirm" onclick="location.reload()">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let myPlayerNumber = null; // Vom Server zugewiesen
+        let scores = { 1: 501, 2: 501 };
+        let totalDarts = { 1: 0, 2: 0 };
+        let currentPlayer = 1;
+        let dartsThrownInTurn = 0;
+        let gameMode = '501';
+        let currentModifier = 1;
+        let history = [];
+
+        const checkoutMap = {
+            170: "T20 T20 BULL", 167: "T20 T19 BULL", 164: "T20 T18 BULL", 161: "T20 T17 BULL", 160: "T20 T20 D20",
+            121: "T20 T11 D14", 100: "T20 D20", 81: "T19 D12", 60: "S20 D20", 40: "D20", 32: "D16", 16: "D8"
+        };
+
+        // EMPFANGEN: Wer bin ich?
+        socket.on('assign-player', (num) => {
+            myPlayerNumber = num;
+            if (num > 0) {
+                document.getElementById(`label-you-${num}`).classList.remove('hidden');
+                document.title = `Darts Pro - Spieler ${num}`;
+            } else {
+                document.title = "Darts Pro - Zuschauer";
+            }
+            updateUI();
+        });
+
+        function startGame(mode) {
+            gameMode = mode;
+            scores[1] = scores[2] = parseInt(mode);
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            renderKeypad();
+            updateUI();
+        }
+
+        function renderKeypad() {
+            const container = document.getElementById('keypad');
+            container.innerHTML = '';
+            for(let i=1; i<=20; i++) {
+                container.innerHTML += `<button class="key" onclick="pressNumber(${i})">${i * currentModifier}</button>`;
+            }
+            container.innerHTML += `<button class="key bull" onclick="pressNumber(25)">25</button>`;
+            container.innerHTML += `<button class="key bull" onclick="pressNumber(50)">50</button>`;
+            container.innerHTML += `<button class="key" onclick="pressNumber(0)">0</button>`;
+        }
+
+        function setModifier(m) {
+            if (myPlayerNumber !== currentPlayer) return; // Sperre
+            currentModifier = (currentModifier === m) ? 1 : m;
+            document.querySelectorAll('.modifier').forEach(b => b.classList.remove('active'));
+            if(currentModifier > 1) document.getElementById(m === 2 ? 'mod-d' : 'mod-t').classList.add('active');
+            renderKeypad();
+        }
+
+        function pressNumber(num) {
+            // WICHTIG: Nur eintragen, wenn man selbst dran ist
+            if (myPlayerNumber !== currentPlayer) {
+                return; 
+            }
+
+            let val = num * currentModifier;
+            if((num === 25 || num === 50) && currentModifier > 1) val = num;
+            executeDart(val, num, false, false);
+            currentModifier = 1;
+            document.querySelectorAll('.modifier').forEach(b => b.classList.remove('active'));
+            renderKeypad();
+        }
+
+        socket.on('update-game', (data) => {
+            executeDart(data.val, data.singleValue, data.isSum, true);
+        });
+
+        function executeDart(val, singleValue, isSum = false, isRemote = false) {
+            let p = currentPlayer;
+            
+            if (scores[p] - val < 2 && scores[p] - val !== 0) {
+                history.push({p: p, val: 0, darts: dartsThrownInTurn, prevScore: scores[p], bust: true});
+                dartsThrownInTurn = 3;
+            } else {
+                history.push({p: p, val: val, darts: dartsThrownInTurn, prevScore: scores[p], bust: false});
+                scores[p] -= val;
+                totalDarts[p]++;
+            }
+
+            if (!isRemote) {
+                socket.emit('dart-thrown', { val, singleValue, isSum });
+            }
+
+            dartsThrownInTurn++;
+            updateUI();
+
+            if(scores[p] === 0) {
+                alert("PLAYER " + p + " WINS!");
+                location.reload();
+            }
+
+            if(dartsThrownInTurn >= 3) {
+                setTimeout(nextTurn, 600);
+            }
+        }
+
+        function nextTurn() {
+            dartsThrownInTurn = 0;
+            currentPlayer = (currentPlayer === 1) ? 2 : 1;
+            updateUI();
+        }
+
+        function undo() {
+            if (myPlayerNumber !== currentPlayer && myPlayerNumber !== null) return; 
+            if(history.length === 0) return;
+            let last = history.pop();
+            scores[last.p] = last.prevScore;
+            if(!last.bust) totalDarts[last.p]--;
+            dartsThrownInTurn = last.darts;
+            currentPlayer = last.p;
+            updateUI();
+        }
+
+        function updateUI() {
+            for (let p of [1, 2]) {
+                document.getElementById(`score${p}`).innerText = scores[p];
+                let pointsThrown = parseInt(gameMode) - scores[p];
+                let avg = totalDarts[p] > 0 ? ((pointsThrown / totalDarts[p]) * 3).toFixed(1) : "0.0";
+                document.getElementById(`avg${p}`).innerText = `AVG: ${avg}`;
+                document.getElementById(`co${p}`).innerText = (p === currentPlayer) ? (checkoutMap[scores[p]] || "") : "";
+            }
+
+            document.getElementById('p1-box').classList.toggle('active', currentPlayer === 1);
+            document.getElementById('p2-box').classList.toggle('active', currentPlayer === 2);
+            
+            // Sperr-Nachricht anzeigen
+            const msg = document.getElementById('turn-msg');
+            if (myPlayerNumber !== null && myPlayerNumber !== currentPlayer && myPlayerNumber !== 0) {
+                msg.classList.remove('hidden');
+            } else {
+                msg.classList.add('hidden');
+            }
+
+            for(let p of [1,2]) {
+                const dots = document.getElementById(`dots${p}`).children;
+                for(let i=0; i<3; i++) {
+                    dots[i].classList.toggle('filled', p === currentPlayer && i < dartsThrownInTurn);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
