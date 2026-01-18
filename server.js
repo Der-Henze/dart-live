@@ -32,7 +32,6 @@ const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => {
     console.log('Darts-Server läuft auf Port ' + PORT);
 });
-const PORT = process.env.PORT || 3000;
 
 // Diese Prüfung verhindert den "ERR_SERVER_ALREADY_LISTEN" Fehler
 if (!module.parent) {
@@ -40,3 +39,4 @@ if (!module.parent) {
         console.log('Darts-Server läuft auf Port ' + PORT);
     });
 }
+
